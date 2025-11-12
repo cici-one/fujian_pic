@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>高斯定理可视化 - 点电荷与球面</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dat.gui@0.7.7/build/dat.gui.min.js"></script>
+    <style>
+        body { 
+            margin: 0; 
+            overflow: hidden; 
+            font-family: Arial, sans-serif;
+        }
+        #container { 
+            position: relative; 
+            width: 100%; 
+            height: 100vh; 
+        }
+        #info {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: white;
+            background-color: rgba(0,0,0,0.7);
+            padding: 15px;
+            border-radius: 5px;
+            max-width: 300px;
+        }
+        #controls {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            color: white;
+            background-color: rgba(0,0,0,0.7);
+            padding: 15px;
+            border-radius: 5px;
+        }
+        .slider-container {
+            margin: 10px 0;
+        }
+        .slider-label {
+            display: flex;
+            justify-content: space-between;
+        }
+        input[type="range"] {
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <div id="info">
+            <h2>高斯定理可视化</h2>
+            <p>点电荷被同心球面包围，电场线呈辐射状穿过球面。</p>
+            <p>虽然电场强度随1/r²减小，但总通量保持不变，因为球面积增长(r²)正好抵消了电场强度的减小。</p>
+            <p id="flux-info">电通量: 恒定 (与半径无关)</p>
+            <p id="field-info">电场强度: 1/r²</p>
+        </div>
+        <div id="controls">
+            <div class="slider-container">
+                <div class="slider-label">
+                    <span>球面半径</span>
+                    <span id="radius-value">3.0</span>
+                </div>
+                <input type="range" id="radius-slider" min="1.5" max="5" step="0.1" value="3">
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 初始化场景、相机和渲染器
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setClearColor(0x111122);
+        document.getElementById('container').appendChild(renderer.domElement);
+
+        // 添加光源
+        const ambientLight = new THREE.AmbientLight(0x404040);
+        scene.add(ambientLight);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
+        directionalLight.position.set(1, 1, 1);
+        scene.add(directionalLight);
+
+        // 创建点电荷（中央发光球体）
+        const pointChargeGeometry = new THREE.SphereGeometry(0.3, 32, 32);
+        const pointChargeMaterial = new THREE.MeshStandardMaterial({ 
+            color: 0xffaa00,
+            emissive: 0xff6600,
+            emissiveIntensity: 1.0,
+            metalness: 0.5,
+            roughness: 0.1
+        });
+        const pointCharge = new THREE.Mesh(pointChargeGeometry, pointChargeMaterial);
+        scene.add(pointCharge);
+
+        // 创建透明球面
+        let sphere = createSphere(3.0);
+        scene.add(sphere);
+
+        // 创建电场线
+        const fieldLines = createFieldLines(12, 3.0);
+        scene.add(fieldLines);
+
+        // 设置相机位置
+        camera.position.set(8, 3, 8);
+        camera.lookAt(0, 0, 0);
+
+        // 添加控制器
+        const gui = new dat.GUI({ autoPlace: false });
+        document.getElementById('controls').appendChild(gui.domElement);
+        
+        const params = {
+            radius: 3.0,
+            showFieldLines: true,
+            showSphere: true
+        };
+        
+        gui.add(params, 'radius', 1.5, 5, 0.1).name('球面半径').onChange(updateRadius);
+        gui.add(params, 'showFieldLines').name('显示电场线').onChange(function(value) {
+            fieldLines.visible = value;
+        });
+        gui.add(params, 'showSphere').name('显示球面').onChange(function(value) {
+            sphere.visible = value;
+        });
+
+        // 滑块控制
+        const radiusSlider = document.getElementById('radius-slider');
+        const radiusValue = document.getElementById('radius-value');
+        
+        radiusSlider.addEventListener('input', function() {
+            const newRadius = parseFloat(this.value);
+            params.radius = newRadius;
+            radiusValue.textContent = newRadius.toFixed(1);
+            updateRadius(newRadius);
+        });
+
+        // 窗口大小调整
+        window.addEventListener('resize', function() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // 动画循环
+        function animate() {
+            requestAnimationFrame(animate);
+            sphere.rotation.y += 0.002;
+            fieldLines.rotation.y += 0.002;
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // 辅助函数
+        function createSphere(radius) {
+            const geometry = new THREE.SphereGeometry(1, 32, 32); // 初始半径为1
+            const material = new THREE.MeshStandardMaterial({
+                color: 0x00aaff,
+                transparent: true,
+                opacity: 0.3,
+                wireframe: false,
+                side: THREE.DoubleSide
+            });
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.scale.set(radius, radius, radius); // 使用缩放来调整半径
+            return mesh;
+        }
+
+        function createFieldLines(count, maxRadius) {
+            const group = new THREE.Group();
+            const material = new THREE.LineBasicMaterial({ color: 0x00ffaa });
+            
+            for (let i = 0; i < count; i++) {
+                // 使用 Fibonacci 球面采样生成均匀分布的电场线方向
+                const phi = Math.acos(1 - (2 * i + 1) / count);
+                const theta = Math.PI * (1 + Math.sqrt(5)) * i;
+                
+                const x = Math.sin(phi) * Math.cos(theta);
+                const y = Math.sin(phi) * Math.sin(theta);
+                const z = Math.cos(phi);
+                
+                const points = [];
+                // 从点电荷表面开始
+                const startRadius = 0.3;
+                points.push(new THREE.Vector3(x * startRadius, y * startRadius, z * startRadius));
+                // 向外延伸
+                points.push(new THREE.Vector3(x * maxRadius, y * maxRadius, z * maxRadius));
+                
+                const geometry = new THREE.BufferGeometry().setFromPoints(points);
+                const line = new THREE.Line(geometry, material);
+                group.add(line);
+            }
+            
+            return group;
+        }
+
+        function updateRadius(newRadius) {
+            // 更新球面大小
+            sphere.scale.set(newRadius, newRadius, newRadius);
+
+            // 更新电场线长度
+            fieldLines.children.forEach(line => {
+                const points = line.geometry.attributes.position.array;
+                const direction = new THREE.Vector3(points[3], points[4], points[5]).normalize();
+                points[3] = direction.x * newRadius;
+                points[4] = direction.y * newRadius;
+                points[5] = direction.z * newRadius;
+                line.geometry.attributes.position.needsUpdate = true;
+            });
+
+            // 更新信息显示
+            document.getElementById('field-info').textContent = `电场强度: 1/${newRadius.toFixed(1)}² ≈ ${(1/(newRadius*newRadius)).toFixed(4)}`;
+        }
+    </script>
+</body>
+</html>

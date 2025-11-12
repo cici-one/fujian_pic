@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>高斯定理模拟 - 非对称曲面</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        canvas {
+            border: 1px solid #000;
+            display: block;
+            margin: 20px auto;
+        }
+        .controls {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .result {
+            text-align: center;
+            font-weight: bold;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1 style="text-align: center;">高斯定理模拟：非对称曲面电通量计算</h1>
+    <div class="controls">
+        <label for="charge">点电荷量 (Q): </label>
+        <input type="number" id="charge" value="1" min="-10" max="10" step="0.1">
+        &nbsp;&nbsp;&nbsp;
+        <label for="surface">选择闭合曲面: </label>
+        <select id="surface">
+            <option value="sphere">球面</option>
+            <option value="ellipsoid">椭球面</option>
+            <option value="irregular">不规则曲面</option>
+        </select>
+        &nbsp;&nbsp;&nbsp;
+        <button onclick="calculateFlux()">计算电通量</button>
+    </div>
+
+    <canvas id="simulationCanvas" width="600" height="400"></canvas>
+
+    <div class="result" id="fluxResult">电通量结果将显示在这里。</div>
+
+    <script>
+        const canvas = document.getElementById('simulationCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // 点电荷位置
+        const chargeX = canvas.width / 2;
+        const chargeY = canvas.height / 2;
+
+        // 绘制点电荷和闭合曲面
+        function drawScene(surfaceType, charge) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // 绘制点电荷
+            ctx.beginPath();
+            ctx.arc(chargeX, chargeY, 5, 0, Math.PI * 2);
+            ctx.fillStyle = charge > 0 ? 'red' : 'blue';
+            ctx.fill();
+            ctx.closePath();
+
+            // 绘制闭合曲面
+            if (surfaceType === 'sphere') {
+                ctx.beginPath();
+                ctx.arc(chargeX, chargeY, 100, 0, Math.PI * 2);
+                ctx.strokeStyle = 'black';
+                ctx.stroke();
+                ctx.closePath();
+            } else if (surfaceType === 'ellipsoid') {
+                // 椭球面
+                drawEllipsoid(chargeX, chargeY, 150, 100);
+            } else if (surfaceType === 'irregular') {
+                // 不规则曲面
+                drawIrregularSurface(chargeX, chargeY);
+            }
+        }
+
+        // 绘制椭球面
+        function drawEllipsoid(cx, cy, a, b) {
+            ctx.beginPath();
+            for (let theta = 0; theta <= 2 * Math.PI; theta += 0.01) {
+                const x = cx + a * Math.cos(theta);
+                const y = cy + b * Math.sin(theta);
+                ctx.lineTo(x, y);
+            }
+            ctx.strokeStyle = 'black';
+            ctx.stroke();
+            ctx.closePath();
+        }
+
+        // 绘制不规则曲面
+        function drawIrregularSurface(cx, cy) {
+            const points = [
+                { x: cx - 50, y: cy - 50 },
+                { x: cx + 50, y: cy - 100 },
+                { x: cx + 100, y: cy + 50 },
+                { x: cx - 50, y: cy + 100 }
+            ];
+            ctx.beginPath();
+            ctx.moveTo(points[0].x, points[0].y);
+            for (let i = 1; i < points.length; i++) {
+                ctx.lineTo(points[i].x, points[i].y);
+            }
+            ctx.closePath();
+            ctx.strokeStyle = 'black';
+            ctx.stroke();
+        }
+
+        // 计算电通量
+        function calculateFlux() {
+            const charge = parseFloat(document.getElementById('charge').value);
+            const surfaceType = document.getElementById('surface').value;
+
+            // 高斯定理：电通量 Φ = Q / ε₀
+            const epsilon0 = 8.854e-12; // 真空介电常数
+            let flux;
+
+            if (surfaceType === 'sphere' || surfaceType === 'ellipsoid') {
+                // 对于对称曲面，直接使用高斯定理
+                flux = charge / epsilon0;
+            } else if (surfaceType === 'irregular') {
+                // 对于不规则曲面，使用数值积分近似计算
+                flux = numericalIntegration(charge);
+            }
+
+            // 更新结果显示
+            document.getElementById('fluxResult').innerText = 
+                `电通量 Φ = ${flux.toExponential(2)} N·m²/C`;
+
+            // 绘制场景
+            drawScene(surfaceType, charge);
+        }
+
+        // 数值积分计算电通量（简化版）
+        function numericalIntegration(charge) {
+            const epsilon0 = 8.854e-12;
+            const numSegments = 100; // 分段数量
+            let totalFlux = 0;
+
+            for (let i = 0; i < numSegments; i++) {
+                const angle = (i / numSegments) * 2 * Math.PI;
+                const x = chargeX + 100 * Math.cos(angle); // 曲面上某点
+                const y = chargeY + 50 * Math.sin(angle);
+
+                // 电场强度（库仑定律）
+                const r = Math.sqrt((x - chargeX) ** 2 + (y - chargeY) ** 2);
+                const E = (1 / (4 * Math.PI * epsilon0)) * (Math.abs(charge) / r ** 2);
+
+                // 面积元法向量与电场方向一致，假设单位面积元
+                const dA = 1;
+                totalFlux += E * dA;
+            }
+
+            return totalFlux;
+        }
+
+        // 初始化绘制
+        drawScene('sphere', 1);
+    </script>
+</body>
+</html>
